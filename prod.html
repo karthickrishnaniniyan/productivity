@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Daily Productivity Tracker with Reminders</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 20px auto;
+      padding: 10px;
+      background: #f4f6f8;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    #task-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    #task-form input, #task-form button {
+      padding: 10px;
+      font-size: 1rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      flex: 1 1 150px;
+    }
+    #task-form button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      flex: 0 0 120px;
+      transition: background-color 0.3s ease;
+    }
+    #task-form button:hover {
+      background-color: #45a049;
+    }
+    #tasks-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    #tasks-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      border-bottom: 1px solid #eee;
+      font-size: 1rem;
+    }
+    #tasks-list li.completed {
+      text-decoration: line-through;
+      color: #888;
+    }
+    #tasks-list li:last-child {
+      border-bottom: none;
+    }
+    .task-info {
+      flex: 1;
+      cursor: pointer;
+    }
+    .task-time {
+      font-size: 0.85rem;
+      color: #666;
+      margin-left: 10px;
+      white-space: nowrap;
+    }
+    .delete-btn {
+      background: transparent;
+      border: none;
+      color: #c00;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 1.2rem;
+      margin-left: 15px;
+      user-select: none;
+    }
+    .delete-btn:hover {
+      color: #900;
+    }
+    #date-picker {
+      margin-bottom: 15px;
+      width: 100%;
+      padding: 10px;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Daily Productivity Tracker with Reminders</h1>
+
+  <input type="date" id="date-picker" />
+
+  <form id="task-form" autocomplete="off">
+    <input type="text" id="task-input" placeholder="Add a new task..." required />
+    <input type="time" id="time-input" required />
+    <button type="submit">Add Task</button>
+  </form>
+
+  <ul id="tasks-list" aria-live="polite" aria-label="Task list"></ul>
+
+  <footer>
+    &copy; 2025 Your Productivity App
+  </footer>
+
+  <script>
+    // Elements
+    const taskForm = document.getElementById('task-form');
+    const taskInput = document.getElementById('task-input');
+    const timeInput = document.getElementById('time-input');
+    const tasksList = document.getElementById('tasks-list');
+    const datePicker = document.getElementById('date-picker');
+
+    // Initialize date picker to today
+    const todayStr = new Date().toISOString().slice(0,10);
+    datePicker.value = todayStr;
+
+    // Storage key prefix
+    const STORAGE_PREFIX = 'productivity_tasks_';
+
+    // Request notification permission on load
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+
+    // Load tasks for selected date
+    function loadTasks(dateStr) {
+      tasksList.innerHTML = '';
+      const saved = localStorage.getItem(STORAGE_PREFIX + dateStr);
+      const tasks = saved ? JSON.parse(saved) : [];
+      tasks.forEach((task, index) => {
+        addTaskToDOM(task, index);
+      });
+    }
+
+    // Save tasks for selected date
+    function saveTasks(dateStr, tasks) {
+      localStorage.setItem(STORAGE_PREFIX + dateStr, JSON.stringify(tasks));
+    }
+
+    // Add task to DOM
+    function addTaskToDOM(task, index) {
+      const li = document.createElement('li');
+      li.className = task.completed ? 'completed' : '';
+      li.setAttribute('data-index', index);
+
+      const taskInfo = document.createElement('div');
+      taskInfo.className = 'task-info';
+      taskInfo.tabIndex = 0;
+      taskInfo.setAttribute('role', 'button');
+      taskInfo.setAttribute('aria-pressed', task.completed);
+      taskInfo.textContent = task.text;
+
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'task-time';
+      timeSpan.textContent = task.time;
+
+      taskInfo.appendChild(timeSpan);
+
+      // Toggle complete on click or Enter key
+      taskInfo.addEventListener('click', () => toggleComplete(index));
+      taskInfo.addEventListener('keydown', e => {
+        if(e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleComplete(index);
+        }
+      });
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.setAttribute('aria-label', 'Delete task');
+      deleteBtn.textContent = '×';
+      deleteBtn.addEventListener('click', () => deleteTask(index));
+
+      li.appendChild(taskInfo);
+      li.appendChild(deleteBtn);
+      tasksList.appendChild(li);
+    }
+
+    // Toggle task complete
+    function toggleComplete(index) {
+      const dateStr = datePicker.value;
+      const saved = localStorage.getItem(STORAGE_PREFIX + dateStr);
+      const tasks = saved ? JSON.parse(saved) : [];
+      tasks[index].completed = !tasks[index].completed;
+      saveTasks(dateStr, tasks);
+      loadTasks(dateStr);
+    }
+
+    // Delete task
+    function deleteTask(index) {
+      const dateStr = datePicker.value;
+      const saved = localStorage.getItem(STORAGE_PREFIX + dateStr);
+      const tasks = saved ? JSON.parse(saved) : [];
+      tasks.splice(index, 1);
+      saveTasks(dateStr, tasks);
+      loadTasks(dateStr);
+    }
+
+    // Add new task
+    taskForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const text = taskInput.value.trim();
+      const time = timeInput.value;
+      if (!text || !time) return;
+
+      const dateStr = datePicker.value;
+      const saved = localStorage.getItem(STORAGE_PREFIX + dateStr);
+      const tasks = saved ? JSON.parse(saved) : [];
+
+      tasks.push({ text, time, completed: false });
+      saveTasks(dateStr, tasks);
+      loadTasks(dateStr);
+
+      taskInput.value = '';
+      timeInput.value = '';
+
+      scheduleReminder(text, time, dateStr);
+    });
+
+    // Load tasks when date changes
+    datePicker.addEventListener('change', () => {
+      loadTasks(datePicker.value);
+    });
+
+    // Schedule browser notification reminder
+    function scheduleReminder(text, time, dateStr) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+      const now = new Date();
+      const [hours, minutes] = time.split(':').map(Number);
+      const reminderDate = new Date(dateStr);
+      reminderDate.setHours(hours, minutes, 0, 0);
+
+      const delay = reminderDate - now;
+      if (delay <= 0) return; // Past time, no reminder
+
+      setTimeout(() => {
+        new Notification('Task Reminder', {
+          body: text,
+          icon: 'https://cdn-icons-png.flaticon.com/512/2921/2921222.png'
+        });
+      }, delay);
+    }
+
+    // Load today's tasks on page load
+    loadTasks(todayStr);
+  </script>
+
+</body>
+</html>
